@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { MODE_PREFIX, ago, createPanel, modeLine, panelHeight, panelText, readModes, setMode, spread, type PanelSpec } from "../src/index.ts";
+import { MODE_PREFIX, ago, row, rowLine, createPanel, modeLine, panelHeight, panelText, readModes, setMode, spread, type PanelSpec } from "../src/index.ts";
 
 const theme: any = {
 	fg: (_tone: string, text: string) => text,
@@ -124,4 +124,12 @@ test("small helpers", () => {
 	assert.equal(ago(undefined), "—");
 	assert.equal(visibleWidth(spread("left side", "right", 20)), 20);
 	assert.match(panelText({ title: "MCP", items: () => [], detail: () => ({ title: "" }), empty: "None." }), /MCP\nNone\./);
+});
+
+test("transcript rows share one grammar and cache their line", () => {
+	const line = rowLine(theme, { symbol: "✓", verb: "mcp", target: "linear.get_issue\nFTY-49", meta: "12 fields" }, 60);
+	assert.match(stripVTControlCharacters(line), /^✓ MCP {4}linear\.get_issue ↵ FTY-49 +12 fields$/);
+	assert.equal(visibleWidth(line), 60);
+	const component = row(theme, { symbol: "●", verb: "agent", target: "reviewer" });
+	assert.equal(component.render(40), component.render(40), "same array: cached");
 });
