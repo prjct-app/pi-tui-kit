@@ -2,9 +2,9 @@
 
 The one TUI every prjct Pi extension uses: minimal, consistent, and actionable.
 
-```bash
-npm install @prjct.app/pi-tui-kit
-```
+Local only, never published to npm. Each extension depends on it as a sibling
+checkout (`"@prjct.app/pi-tui-kit": "file:../pi-tui-kit"`) and bundles it into
+its build; `~/Apps/pi/install-local.sh` builds the kit and installs everything.
 
 ## Rules
 

@@ -1,6 +1,6 @@
 {
   "name": "@prjct.app/pi-tui-kit",
-  "version": "0.0.0-development",
+  "version": "0.1.0",
   "description": "One minimal, actionable TUI for every prjct Pi extension: a docked list/detail panel with one-key actions, and one line for active modes.",
   "type": "module",
   "keywords": [
@@ -29,7 +29,6 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "check": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
-    "prepack": "npm run build",
     "check:package": "npm pack --dry-run --ignore-scripts"
   },
   "engines": {
@@ -55,7 +54,5 @@
   "bugs": {
     "url": "https://github.com/prjct-app/pi-tui-kit/issues"
   },
-  "publishConfig": {
-    "access": "public"
-  }
+  "private": true
 }
