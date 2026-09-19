@@ -1,4 +1,5 @@
 export { SYMBOL, ago, fit, paint, spread, type Tone } from "./style.ts";
+export { BRAND, ON_OFF, brand, completer, type CommandOption } from "./commands.ts";
 export { row, rowLine, type RowSpec } from "./row.ts";
 export { MODE_PREFIX, modeLine, readModes, setMode } from "./modes.ts";
 export {

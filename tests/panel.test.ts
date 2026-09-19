@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { MODE_PREFIX, ago, row, rowLine, createPanel, modeLine, panelHeight, panelText, readModes, setMode, spread, type PanelSpec } from "../src/index.ts";
+import { MODE_PREFIX, ON_OFF, ago, brand, completer, row, rowLine, createPanel, modeLine, panelHeight, panelText, readModes, setMode, spread, type PanelSpec } from "../src/index.ts";
 
 const theme: any = {
 	fg: (_tone: string, text: string) => text,
@@ -132,4 +132,18 @@ test("transcript rows share one grammar and cache their line", () => {
 	assert.equal(visibleWidth(line), 60);
 	const component = row(theme, { symbol: "●", verb: "agent", target: "reviewer" });
 	assert.equal(component.render(40), component.render(40), "same array: cached");
+});
+
+test("completions walk every level and carry the prjct mark", () => {
+	const complete = completer([
+		{ value: "connect", description: "connect a server", options: () => [{ value: "linear", description: "oauth" }, { value: "jira", description: "oauth" }] },
+		{ value: "status", description: "show every server" },
+		...ON_OFF("delegation"),
+	]);
+	assert.deepEqual(complete("")!.map(item => item.value), ["connect", "status", "on", "off"]);
+	assert.deepEqual(complete("st"), [{ value: "status", label: "status", description: "p · show every server" }]);
+	assert.deepEqual(complete("connect ")!.map(item => item.value), ["connect linear", "connect jira"]);
+	assert.deepEqual(complete("connect j")!.map(item => item.label), ["jira"]);
+	assert.equal(complete("nope "), null);
+	assert.equal(brand("x"), "p · x");
 });
