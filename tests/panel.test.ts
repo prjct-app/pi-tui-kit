@@ -128,7 +128,7 @@ test("small helpers", () => {
 
 test("transcript rows share one grammar and cache their line", () => {
 	const line = rowLine(theme, { symbol: "✓", verb: "mcp", target: "linear.get_issue\nFTY-49", meta: "12 fields" }, 60);
-	assert.match(stripVTControlCharacters(line), /^✓ MCP {4}linear\.get_issue ↵ FTY-49 +12 fields$/);
+	assert.match(stripVTControlCharacters(line), /^✓ MCP {5}linear\.get_issue ↵ FTY-49 +12 fields$/);
 	assert.equal(visibleWidth(line), 60);
 	const component = row(theme, { symbol: "●", verb: "agent", target: "reviewer" });
 	assert.equal(component.render(40), component.render(40), "same array: cached");

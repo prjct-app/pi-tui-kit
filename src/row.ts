@@ -16,13 +16,14 @@ export type RowSpec = {
 	metaTone?: Tone;
 };
 
-const VERB_WIDTH = 6;
+/** Same column as p-ui's built-in tool rows. */
+const VERB_WIDTH = 8;
 
 /** The row as a string, the same grammar p-ui uses for built-in tools. */
 export function rowLine(theme: Theme, spec: RowSpec, width: number): string {
 	const verb = theme.fg("toolTitle", theme.bold(spec.verb.toUpperCase().slice(0, VERB_WIDTH).padEnd(VERB_WIDTH)));
 	const target = theme.fg("toolOutput", spec.target.replace(/\r?\n/g, " ↵ "));
-	const left = `${paint(theme, spec.tone, spec.symbol)} ${verb} ${target}`;
+	const left = `${paint(theme, spec.tone, spec.symbol)} ${verb}${target}`;
 	return spread(left, spec.meta ? paint(theme, spec.metaTone ?? "dim", spec.meta) : "", width);
 }
 
