@@ -44,7 +44,8 @@ export type PanelControl = {
 export type PanelAction = {
 	/** A single printable character, shown in the footer. */
 	key: string;
-	label: string;
+	/** Fixed, or worded for the item ("Authenticate" / "Re-authenticate"). */
+	label: string | ((item: PanelItem | undefined) => string);
 	/** Shown and allowed only when this returns true. */
 	when?: (item: PanelItem | undefined) => boolean;
 	/** Destructive actions ask for the key again before running. */
@@ -83,6 +84,8 @@ type State = {
 };
 
 const WIDE = 90;
+const labelOf = (action: PanelAction, item: PanelItem | undefined): string =>
+	typeof action.label === "function" ? action.label(item) : action.label;
 const RESERVED = new Set(["/", "?", "q", "j", "k"]);
 
 /** Panel height: most of a small terminal, bounded on a large one. */
@@ -147,15 +150,16 @@ export function createPanel(spec: PanelSpec, tui: TUI, theme: Theme, done: () =>
 	};
 
 	const run = async (action: PanelAction, item: PanelItem | undefined): Promise<void> => {
+		const label = labelOf(action, item);
 		state.confirm = undefined;
 		state.busy = true;
-		state.notice = { text: `${action.label}…`, tone: "dim" };
+		state.notice = { text: `${label}…`, tone: "dim" };
 		request();
 		try {
 			await action.run(item, control);
-			if (state.notice?.text === `${action.label}…`) state.notice = undefined;
+			if (state.notice?.text === `${label}…`) state.notice = undefined;
 		} catch (error) {
-			state.notice = { text: `${action.label} failed: ${error instanceof Error ? error.message : String(error)}`, tone: "error" };
+			state.notice = { text: `${label} failed: ${error instanceof Error ? error.message : String(error)}`, tone: "error" };
 		} finally {
 			state.busy = false;
 			request();
@@ -210,7 +214,7 @@ export function createPanel(spec: PanelSpec, tui: TUI, theme: Theme, done: () =>
 			if (action) {
 				if (action.confirm && state.confirm !== data) {
 					state.confirm = data;
-					state.notice = { text: `Press ${data} again to ${action.label.toLowerCase()}${item ? ` ${item.label}` : ""} · any other key cancels`, tone: "warning" };
+					state.notice = { text: `Press ${data} again to ${labelOf(action, item).toLowerCase()}${item ? ` ${item.label}` : ""} · any other key cancels`, tone: "warning" };
 				} else void run(action, item);
 			}
 		}
@@ -248,13 +252,13 @@ export function createPanel(spec: PanelSpec, tui: TUI, theme: Theme, done: () =>
 		const rows: [string, string][] = [
 			["↑↓ j k", "move"], ["enter →", "open detail"], ["tab", "switch list / detail"],
 			["pgup pgdn", "scroll detail"], ["/", "search"], ["esc", "back · clear · close"], ["q", "close"],
-			...(spec.actions ?? []).map(action => [action.key, `${action.label}${action.confirm ? " (asks again)" : ""}`] as [string, string]),
+			...(spec.actions ?? []).map(action => [action.key, `${labelOf(action, undefined)}${action.confirm ? " (asks again)" : ""}`] as [string, string]),
 		];
 		return [theme.fg("accent", " Keys"), ...rows.map(([key, text]) => fit(`   ${theme.fg("accent", fit(key, 10))} ${text}`, width))];
 	};
 
 	const footer = (width: number, item: PanelItem | undefined): string => {
-		const actions = state.busy ? [] : available(item).map(action => `${theme.fg("accent", action.key)} ${action.label}`);
+		const actions = state.busy ? [] : available(item).map(action => `${theme.fg("accent", action.key)} ${labelOf(action, item)}`);
 		const always = [`${theme.fg("dim", "?")} ${theme.fg("dim", "keys")}`, theme.fg("dim", "esc")];
 		return fit(` ${[...actions, ...always].join(theme.fg("dim", " · "))}`, width);
 	};
