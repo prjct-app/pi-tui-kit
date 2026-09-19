@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { MODE_PREFIX, ON_OFF, ago, brand, completer, row, rowLine, createPanel, modeLine, panelHeight, panelText, readModes, setMode, spread, type PanelSpec } from "../src/index.ts";
+import { MODE_PREFIX, ON_OFF, currentModes, onModes, ago, brand, completer, row, rowLine, createPanel, modeLine, panelHeight, panelText, readModes, setMode, spread, type PanelSpec } from "../src/index.ts";
 
 const theme: any = {
 	fg: (_tone: string, text: string) => text,
@@ -109,7 +109,7 @@ test("help lists every key, and q closes", async () => {
 
 test("modes share one prefix and one line", () => {
 	const statuses: Array<[string, string | undefined]> = [];
-	const ctx: any = { hasUI: true, ui: { theme, setStatus: (key: string, value: string | undefined) => statuses.push([key, value]) } };
+	const ctx: any = { hasUI: true, ui: { theme, setStatus: (key: string, value: string | undefined) => statuses.push([key, value]), setWidget: () => {} } };
 	setMode(ctx, "plan", "plan 2/5");
 	setMode(ctx, "agents", undefined);
 	assert.deepEqual(statuses, [[`${MODE_PREFIX}plan`, "◆ plan 2/5"], [`${MODE_PREFIX}agents`, undefined]]);
@@ -146,4 +146,24 @@ test("completions walk every level and carry the prjct mark", () => {
 	assert.deepEqual(complete("connect j")!.map(item => item.label), ["jira"]);
 	assert.equal(complete("nope "), null);
 	assert.equal(brand("x"), "p · x");
+});
+
+test("modes are shared across bundled copies of the kit through one process registry", () => {
+	const widgets: any[] = [];
+	const ctx: any = { hasUI: true, ui: { theme, setStatus: () => {}, setWidget: (key: string, factory: any, options: any) => widgets.push({ key, factory, options }) } };
+	setMode(ctx, "plan", undefined);
+	const seen = { count: 0 };
+	const stop = onModes(() => { seen.count += 1; });
+	setMode(ctx, "zeta", "zeta");
+	setMode(ctx, "zeta", "zeta");
+	assert.equal(seen.count, 1, "an unchanged mode does not notify");
+	assert.ok(currentModes().includes("◆ zeta"));
+	const shown = widgets.at(-1);
+	assert.equal(shown.key, "prjct-modes");
+	assert.equal(shown.options.placement, "aboveEditor", "the mode line sits above the editor");
+	assert.deepEqual(shown.factory({ requestRender() {} }, theme).render(60), [" ◆ zeta"]);
+	setMode(ctx, "zeta", undefined);
+	assert.ok(!currentModes().includes("◆ zeta"));
+	assert.equal(widgets.at(-1).factory, undefined, "no mode, no line");
+	stop();
 });
