@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { MODE_PREFIX, ON_OFF, currentModes, onModes, ago, brand, completer, row, rowLine, createPanel, modeLine, panelHeight, panelText, readModes, setMode, spread, type PanelSpec } from "../src/index.ts";
+import { MODE_PREFIX, ON_OFF, currentModes, onModes, ago, brand, completer, row, rowLine, createPanel, createSecretPrompt, modeLine, panelHeight, panelText, readModes, setMode, spread, type PanelSpec } from "../src/index.ts";
 
 const theme: any = {
 	fg: (_tone: string, text: string) => text,
@@ -67,6 +67,23 @@ test("a destructive action asks for its key again; any other key cancels", async
 	assert.deepEqual(h.ran, ["logout jira"]);
 });
 
+test("Enter activates actionable items with confirmation when configured", async () => {
+	const activated: string[] = [];
+	const h = harness({
+		activate: {
+			label: "Export",
+			confirm: true,
+			when: item => item?.id === "linear",
+			run: item => { activated.push(item!.id); },
+		},
+	});
+	await h.press(KEY.enter);
+	assert.deepEqual(activated, []);
+	assert.ok(h.screen().some(line => /Press Enter again to export linear/.test(line)));
+	await h.press(KEY.enter);
+	assert.deepEqual(activated, ["linear"]);
+});
+
 test("search filters by label and meta, and esc clears before it closes", async () => {
 	const h = harness();
 	await h.press("/", "s", "i", "g", "n", KEY.enter);
@@ -117,6 +134,29 @@ test("modes share one prefix and one line", () => {
 	assert.deepEqual(modes, ["◆ agents ● 1", "◆ plan"]);
 	assert.equal(modeLine(theme, modes), " ◆ agents ● 1  ·  ◆ plan");
 	assert.equal(modeLine(theme, []), undefined);
+});
+
+test("the shared secret prompt is docked, masks input, and validates before submit", async () => {
+	const renders = { count: 0 };
+	const tui: any = { terminal: { columns: 80, rows: 30 }, requestRender: () => { renders.count += 1; } };
+	const result: { value?: string } = {};
+	const validated: string[] = [];
+	const prompt = createSecretPrompt({
+		title: "Global evaluator key",
+		message: "Stored once for every project.",
+		label: "key",
+		validate: async value => { validated.push(value); return undefined; },
+	}, tui, theme, value => { result.value = value; });
+	for (const key of "super-secret") prompt.handleInput!(key);
+	const screen = prompt.render(80).map(line => stripVTControlCharacters(line));
+	assert.equal(screen.length, panelHeight(30));
+	assert.equal(screen.some(line => line.includes("super-secret")), false);
+	assert.ok(screen.some(line => line.includes("••••••••••••")));
+	prompt.handleInput!(KEY.enter);
+	await new Promise(resolve => setImmediate(resolve));
+	assert.deepEqual(validated, ["super-secret"]);
+	assert.equal(result.value, "super-secret");
+	assert.ok(renders.count > 0);
 });
 
 test("small helpers", () => {

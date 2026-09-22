@@ -53,6 +53,8 @@ export type PanelAction = {
 	run: (item: PanelItem | undefined, panel: PanelControl) => void | Promise<void>;
 };
 
+export type PanelActivation = Omit<PanelAction, "key">;
+
 export type PanelSpec = {
 	title: string;
 	/** Counts next to the title: "8 servers · 3 signed in". */
@@ -60,6 +62,8 @@ export type PanelSpec = {
 	items: () => PanelItem[];
 	detail: (item: PanelItem) => PanelDetail;
 	actions?: PanelAction[];
+	/** Optional Enter behavior for actionable list items. Without it Enter opens detail. */
+	activate?: PanelActivation;
 	/** Shown when there are no items; say what to do next. */
 	empty?: string;
 	/** Live data: call the listener when something changed. Returns an unsubscribe. */
@@ -84,7 +88,7 @@ type State = {
 };
 
 const WIDE = 90;
-const labelOf = (action: PanelAction, item: PanelItem | undefined): string =>
+const labelOf = (action: Pick<PanelAction, "label">, item: PanelItem | undefined): string =>
 	typeof action.label === "function" ? action.label(item) : action.label;
 const RESERVED = new Set(["/", "?", "q", "j", "k"]);
 
@@ -189,7 +193,8 @@ export function createPanel(spec: PanelSpec, tui: TUI, theme: Theme, done: () =>
 		const items = visible();
 		const item = current(items);
 		const wide = (tui.terminal?.columns ?? 120) >= WIDE;
-		if (state.confirm && data !== state.confirm) { state.confirm = undefined; state.notice = undefined; }
+		const confirmingEnter = state.confirm === "enter" && matchesKey(data, Key.enter);
+		if (state.confirm && !confirmingEnter && data !== state.confirm) { state.confirm = undefined; state.notice = undefined; }
 
 		if (matchesKey(data, Key.escape)) {
 			if (state.focus === "detail") { state.focus = "list"; state.scroll = 0; }
@@ -199,6 +204,13 @@ export function createPanel(spec: PanelSpec, tui: TUI, theme: Theme, done: () =>
 		else if (data === "/") { state.searching = true; state.focus = "list"; }
 		else if (data === "?") state.help = true;
 		else if (matchesKey(data, Key.tab)) state.focus = state.focus === "list" ? "detail" : "list";
+		else if (matchesKey(data, Key.enter) && state.focus === "list" && item && spec.activate && (!spec.activate.when || spec.activate.when(item))) {
+			const action: PanelAction = { key: "enter", ...spec.activate };
+			if (action.confirm && state.confirm !== "enter") {
+				state.confirm = "enter";
+				state.notice = { text: `Press Enter again to ${labelOf(action, item).toLowerCase()} ${item.label} · any other key cancels`, tone: "warning" };
+			} else void run(action, item);
+		}
 		else if (matchesKey(data, Key.enter) || (matchesKey(data, Key.right) && state.focus === "list")) { if (item) state.focus = "detail"; }
 		else if (matchesKey(data, Key.left) && state.focus === "detail" && !wide) state.focus = "list";
 		else if (matchesKey(data, Key.pageDown)) state.scroll += 10;
@@ -236,11 +248,10 @@ export function createPanel(spec: PanelSpec, tui: TUI, theme: Theme, done: () =>
 			const text = state.query ? `Nothing matches “${state.query}”. esc clears the search.` : spec.empty ?? "Nothing here yet.";
 			return wrapTextWithAnsi(theme.fg("muted", text), Math.max(8, width - 2)).map(line => ` ${line}`).slice(0, height);
 		}
-		const selected = current(items);
-		const index = Math.max(0, items.findIndex(item => item.id === selected?.id));
-		const start = Math.max(0, Math.min(index - Math.floor(height / 2), items.length - height));
+		const index = Math.max(0, items.findIndex(item => item.id === current(items)?.id));
+		const start = Math.max(0, Math.min(index - Math.floor(height / 2), Math.max(0, items.length - height)));
 		return items.slice(start, start + height).map(item => {
-			const chosen = item.id === selected?.id;
+			const chosen = item.id === current(items)?.id;
 			const cursor = chosen ? theme.fg(state.focus === "list" ? "accent" : "dim", SYMBOL.cursor) : " ";
 			const symbol = item.symbol ? `${paint(theme, item.tone, item.symbol)} ` : "";
 			const label = chosen ? theme.bold(item.label) : item.label;

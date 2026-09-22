@@ -78,6 +78,21 @@ await openPanel(ctx, {
 
 `panelText(spec)` renders the same data as plain text for print and RPC modes.
 
+## Secret prompt
+
+Use the shared docked prompt for API keys and tokens. It never renders the secret and validates inline; do not create modal overlays or browser setup flows.
+
+```ts
+import { openSecretPrompt } from "@prjct.app/pi-tui-kit";
+
+const key = await openSecretPrompt(ctx, {
+  title: "Global evaluator key",
+  message: "Stored once for every project.",
+  label: "key",
+  validate: async value => await validateKey(value),
+});
+```
+
 ## Modes
 
 ```ts
