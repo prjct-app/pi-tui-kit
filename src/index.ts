@@ -58,4 +58,4 @@ export {
 	type ReplyRules,
 } from "./contracts.ts";
 export { createChecklist, openChecklist, type ChecklistItem, type ChecklistResult, type ChecklistSpec } from "./checklist.ts";
-export { ENGLISH_RULE, ENGLISH_SYSTEM, cheapComplete, cheapestModel, isEnglish, toEnglishFields, toEnglishInstructions, type Complete } from "./english.ts";
+export { ENGLISH_RULE, ENGLISH_SYSTEM, cheapComplete, cheapestModel, isEnglish, sessionComplete, toEnglishFields, toEnglishInstructions, type Complete } from "./english.ts";

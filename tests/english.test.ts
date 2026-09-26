@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ENGLISH_SYSTEM, cheapestModel, isEnglish, toEnglishFields, toEnglishInstructions, type Complete } from "../src/index.ts";
+import { ENGLISH_SYSTEM, cheapestModel, isEnglish, sessionComplete, toEnglishFields, toEnglishInstructions, type Complete } from "../src/index.ts";
 
 const recorder = (reply: string | (() => never)) => {
 	const calls: { system: string; user: string }[] = [];
@@ -56,4 +56,20 @@ test("the cheapest reachable model is picked by input plus output price", () => 
 	] } };
 	assert.equal(cheapestModel(ctx)?.id, "flash");
 	assert.equal(cheapestModel({}), undefined);
+});
+
+test("the session's own model rewrites, through Pi's registry", async () => {
+	const seen: { model?: unknown; system?: string; user?: string }[] = [];
+	const model = { provider: "openai-codex", id: "gpt-6-sol" };
+	const ctx = { model, modelRegistry: { getAvailable: () => [{ provider: "openrouter", id: "free", cost: { input: 0, output: 0 } }],
+		complete: async (used: never, context: never) => {
+			const c = context as { systemPrompt: string; messages: { content: string }[] };
+			seen.push({ model: used, system: c.systemPrompt, user: c.messages[0]?.content });
+			return { stopReason: "stop", content: [{ type: "text", text: " Map the store. " }] };
+		} } };
+	assert.equal(await sessionComplete(ctx)("sys", "Mapea el store"), "Map the store.");
+	assert.deepEqual(seen, [{ model, system: "sys", user: "Mapea el store" }]);
+	assert.equal(await sessionComplete({ modelRegistry: ctx.modelRegistry })("sys", "x"), "");
+	const failing = { model, modelRegistry: { complete: async () => ({ stopReason: "error", content: [] }) } };
+	assert.equal(await sessionComplete(failing)("sys", "x"), "");
 });
