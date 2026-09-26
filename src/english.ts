@@ -5,8 +5,10 @@
  * that receives the work reads one. Instructions written by a model are asked
  * for in English at the source (ENGLISH_RULE in tool descriptions); anything
  * that still arrives in another language, or that the person typed directly,
- * is rewritten into plain English by the cheapest model the session can reach
- * before it is delivered. The person's own conversation is never touched.
+ * is rewritten into plain English by the session's own model before it is
+ * delivered. The cheapest reachable model was used before: an unpriced free
+ * route counted as the cheapest, and the person's words reached every agent
+ * through it. The person's own conversation is never touched.
  *
  * Nothing is blocked: when no model can translate, the original goes through.
  */
@@ -103,6 +105,31 @@ export function cheapComplete(ctx: RegistryContext): Complete {
 		} as never, { signal, maxTokens: Math.min(4096, Math.max(256, Math.ceil(user.length / 2))) } as never);
 		if (reply.stopReason === "error" || reply.stopReason === "aborted") return "";
 		return (reply.content ?? []).filter((part: { type: string }) => part.type === "text").map((part: { type: string; text?: string }) => part.text ?? "").join("\n").trim();
+	};
+}
+
+type SessionContext = {
+	model?: ModelLike;
+	modelRegistry?: {
+		complete?: (model: never, context: never, options?: never) => Promise<{ stopReason?: string; content?: { type: string; text?: string }[] }>;
+	};
+};
+
+/**
+ * A Complete bound to the model the session is using, through Pi's registry so
+ * its own authentication applies; empty text when there is no model.
+ */
+export function sessionComplete(ctx: SessionContext): Complete {
+	return async (system, user, signal) => {
+		const model = ctx.model;
+		const complete = ctx.modelRegistry?.complete;
+		if (!model || !complete) return "";
+		const reply = await complete.call(ctx.modelRegistry, model as never, {
+			systemPrompt: system,
+			messages: [{ role: "user", content: user, timestamp: Date.now() }],
+		} as never, { signal, maxTokens: Math.min(4096, Math.max(256, Math.ceil(user.length / 2))) } as never);
+		if (reply.stopReason === "error" || reply.stopReason === "aborted") return "";
+		return (reply.content ?? []).filter(part => part.type === "text").map(part => part.text ?? "").join("\n").trim();
 	};
 }
 
