@@ -1,5 +1,6 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
+import { stamp } from "./stamp.ts";
 import { paint, spread, type Tone } from "./style.ts";
 
 /** One transcript line for a tool call or an extension message. */
@@ -14,6 +15,8 @@ export type RowSpec = {
 	/** Right-aligned outcome: "exit 0 · 1.2s", "3 results", "failed". */
 	meta?: string;
 	metaTone?: Tone;
+	/** When Pi made the call. Shown as "p. 16:30 /" before the verb. */
+	at?: number;
 };
 
 /** Same column as p-ui's built-in tool rows. */
@@ -23,7 +26,8 @@ const VERB_WIDTH = 8;
 export function rowLine(theme: Theme, spec: RowSpec, width: number): string {
 	const verb = theme.fg("toolTitle", theme.bold(spec.verb.toUpperCase().slice(0, VERB_WIDTH).padEnd(VERB_WIDTH)));
 	const target = theme.fg("toolOutput", spec.target.replace(/\r?\n/g, " ↵ "));
-	const left = `${paint(theme, spec.tone, spec.symbol)} ${verb}${target}`;
+	const when = spec.at === undefined ? "" : `${stamp(theme, "p", spec.at)} ${theme.fg("dim", "/")} `;
+	const left = `${paint(theme, spec.tone, spec.symbol)} ${when}${verb}${target}`;
 	return spread(left, spec.meta ? paint(theme, spec.metaTone ?? "dim", spec.meta) : "", width);
 }
 
