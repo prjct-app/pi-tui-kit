@@ -45,10 +45,12 @@ export {
 	REPLY_KINDS,
 	isReply,
 	problemsOf,
+	repairReply,
 	replyHeadline,
 	replyLines,
 	replyProblems,
 	replySchema,
+	salvageReply,
 	type AnswerReply,
 	type BlockedReply,
 	type ChangeReply,
@@ -58,5 +60,6 @@ export {
 	type ReplyKind,
 	type ReplyRules,
 } from "./contracts.ts";
+export { createForm, openForm, type FormField, type FormSpec, type FormValues } from "./form.ts";
 export { createChecklist, openChecklist, type ChecklistItem, type ChecklistResult, type ChecklistSpec } from "./checklist.ts";
 export { ENGLISH_RULE, ENGLISH_SYSTEM, cheapComplete, cheapestModel, isEnglish, sessionComplete, toEnglishFields, toEnglishInstructions, type Complete } from "./english.ts";

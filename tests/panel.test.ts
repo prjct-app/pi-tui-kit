@@ -67,6 +67,15 @@ test("a destructive action asks for its key again; any other key cancels", async
 	assert.deepEqual(h.ran, ["logout jira"]);
 });
 
+test("a bulk action's confirm prompt does not name the selected item", async () => {
+	const ran: string[] = [];
+	const h = harness({ actions: [{ key: "D", label: "Purge 2 finished", confirm: true, bulk: true, run: () => { ran.push("purge"); } }] });
+	await h.press("D");
+	assert.ok(h.screen().some(line => /Press D again to purge 2 finished · any other key cancels/.test(line)));
+	await h.press("D");
+	assert.deepEqual(ran, ["purge"]);
+});
+
 test("Enter activates actionable items with confirmation when configured", async () => {
 	const activated: string[] = [];
 	const h = harness({
