@@ -76,6 +76,8 @@ await openPanel(ctx, {
 });
 ```
 
+An action that acts on the whole panel rather than the selected item (purge finished, stop all) sets `bulk: true`, so its confirm prompt does not name the selected item.
+
 `panelText(spec)` renders the same data as plain text for print and RPC modes.
 
 ## Secret prompt

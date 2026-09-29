@@ -51,7 +51,7 @@ test("fields are judged one by one", async () => {
 test("the cheapest reachable model is picked by input plus output price", () => {
 	const ctx = { modelRegistry: { getAvailable: () => [
 		{ provider: "openai", id: "big", cost: { input: 5, output: 20 } },
-		{ provider: "openrouter", id: "flash", cost: { input: 0.1, output: 0.4 } },
+		{ provider: "google", id: "flash", cost: { input: 0.1, output: 0.4 } },
 		{ provider: "xai", id: "mid", cost: { input: 1, output: 2 } },
 	] } };
 	assert.equal(cheapestModel(ctx)?.id, "flash");
@@ -61,7 +61,7 @@ test("the cheapest reachable model is picked by input plus output price", () => 
 test("the session's own model rewrites, through Pi's registry", async () => {
 	const seen: { model?: unknown; system?: string; user?: string }[] = [];
 	const model = { provider: "openai-codex", id: "gpt-6-sol" };
-	const ctx = { model, modelRegistry: { getAvailable: () => [{ provider: "openrouter", id: "free", cost: { input: 0, output: 0 } }],
+	const ctx = { model, modelRegistry: { getAvailable: () => [{ provider: "google", id: "free", cost: { input: 0, output: 0 } }],
 		complete: async (used: never, context: never) => {
 			const c = context as { systemPrompt: string; messages: { content: string }[] };
 			seen.push({ model: used, system: c.systemPrompt, user: c.messages[0]?.content });

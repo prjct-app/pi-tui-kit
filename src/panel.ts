@@ -50,6 +50,8 @@ export type PanelAction = {
 	when?: (item: PanelItem | undefined) => boolean;
 	/** Destructive actions ask for the key again before running. */
 	confirm?: boolean;
+	/** Acts on the whole panel ("Purge finished", "Stop all"), so the confirm prompt does not name the selected item. */
+	bulk?: boolean;
 	run: (item: PanelItem | undefined, panel: PanelControl) => void | Promise<void>;
 };
 
@@ -226,7 +228,7 @@ export function createPanel(spec: PanelSpec, tui: TUI, theme: Theme, done: () =>
 			if (action) {
 				if (action.confirm && state.confirm !== data) {
 					state.confirm = data;
-					state.notice = { text: `Press ${data} again to ${labelOf(action, item).toLowerCase()}${item ? ` ${item.label}` : ""} · any other key cancels`, tone: "warning" };
+					state.notice = { text: `Press ${data} again to ${labelOf(action, item).toLowerCase()}${item && !action.bulk ? ` ${item.label}` : ""} · any other key cancels`, tone: "warning" };
 				} else void run(action, item);
 			}
 		}
