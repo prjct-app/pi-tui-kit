@@ -96,9 +96,26 @@ export type NeedsInputReply = Static<typeof NeedsInputReplySchema>;
 export type BlockedReply = Static<typeof BlockedReplySchema>;
 export type Reply = ChangeReply | AnswerReply | DiagnosisReply | NeedsInputReply | BlockedReply;
 
-/** The schema a reply tool declares: every kind this caller accepts, as one union. */
+/**
+ * Keywords the model does not need to read: limits and descriptions are checked
+ * after repair (replyProblems), and the tool description already says what
+ * each field holds. Paid on every request, so the reply tool sends only the
+ * shape: types, required fields, closed sets.
+ */
+const NOT_FOR_THE_MODEL = new Set(["description", "maxLength", "minLength", "maxItems", "minItems", "minimum", "maximum"]);
+const shapeOnly = (schema: unknown): unknown => {
+	if (Array.isArray(schema)) return schema.map(shapeOnly);
+	if (typeof schema !== "object" || schema === null) return schema;
+	return Object.fromEntries(Object.entries(schema).filter(([key]) => !NOT_FOR_THE_MODEL.has(key)).map(([key, value]) => [key, shapeOnly(value)]));
+};
+
+/**
+ * The schema a reply tool declares: every kind this caller accepts, as one
+ * union, shape only. The full schemas, limits included, still validate the
+ * reply (replyProblems) after repair.
+ */
 export function replySchema(kinds: readonly ReplyKind[] = REPLY_KINDS) {
-	return Type.Union(kinds.map(kind => SCHEMAS[kind]));
+	return Type.Unsafe<Reply>(shapeOnly(JSON.parse(JSON.stringify(Type.Union(kinds.map(kind => SCHEMAS[kind]))))) as object);
 }
 
 const validators = new Map<ReplyKind, ReturnType<typeof Compile>>();
