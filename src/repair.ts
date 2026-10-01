@@ -60,6 +60,8 @@ const asText = (value: unknown): string | undefined => {
 	if (typeof value === "number" || typeof value === "boolean") return String(value);
 	if (isRecord(value)) {
 		for (const key of TEXT_KEYS) if (typeof value[key] === "string" || typeof value[key] === "number") return String(value[key]);
+		const parts = Object.values(value).filter((item): item is string | number => typeof item === "string" || typeof item === "number");
+		if (parts.length) return parts.join(" — ");
 	}
 	return undefined;
 };
@@ -77,6 +79,14 @@ const listInside = (value: unknown): unknown => {
 };
 
 const EMPTY = new Set(["", "none", "n/a", "na", "null", "nil", "-", "[]"]);
+
+/** Words models use for common enum values everywhere, by the value they mean; a tool's own synonyms win. */
+const SYNONYMS: Readonly<Record<string, string>> = {
+	added: "created", add: "created", new: "created", create: "created",
+	updated: "modified", update: "modified", modify: "modified", changed: "modified", edited: "modified", edit: "modified",
+	removed: "deleted", remove: "deleted", delete: "deleted",
+	true: "yes", false: "no", met: "yes", "not met": "no", partial: "unknown", partially: "unknown", unclear: "unknown",
+};
 const MARK = "… [truncated]";
 
 function enumValue(node: Node, value: unknown, options: RepairOptions): unknown {
@@ -87,8 +97,7 @@ function enumValue(node: Node, value: unknown, options: RepairOptions): unknown 
 	const lower = text.toLowerCase();
 	const exact = allowed.find(item => typeof item === "string" && item.toLowerCase() === lower);
 	if (exact !== undefined) return exact;
-	const meant = options.synonyms?.[lower];
-	if (meant !== undefined && allowed.includes(meant)) return meant;
+	for (const meant of [options.synonyms?.[lower], SYNONYMS[lower]]) if (meant !== undefined && allowed.includes(meant)) return meant;
 	const loose = allowed.find(item => typeof item === "string" && item.toLowerCase().replace(/[\s_-]/gu, "") === lower.replace(/[\s_-]/gu, ""));
 	return loose ?? value;
 }
@@ -113,8 +122,10 @@ function fix(node: Node, raw: unknown, options: RepairOptions, depth: number): u
 		}
 		case "number":
 		case "integer": {
+			const leading = typeof value === "string" ? /^\s*(-?\d+(?:\.\d+)?)/u.exec(value) : null;
 			const number = typeof value === "number" ? value
-				: typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : undefined;
+				: typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value)
+					: kind === "integer" && leading ? Number(leading[1]) : undefined;
 			if (number === undefined) return value;
 			const whole = kind === "integer" ? Math.round(number) : number;
 			const low = node.minimum ?? (node.exclusiveMinimum !== undefined ? node.exclusiveMinimum + (kind === "integer" ? 1 : Number.EPSILON) : undefined);
@@ -159,11 +170,21 @@ function object(node: Node, value: unknown, options: RepairOptions, depth: numbe
 		const repaired = fix(child, source, options, depth + 1);
 		const optional = !(node.required ?? []).includes(key);
 		// An optional field that is empty or still off its schema is dropped instead of failing the call.
-		if (optional && (repaired === null && !types(child).includes("null") || (repaired === "" && types(child).includes("string") && !Value.Check(child as TSchema, "")))) continue;
+		const empty = repaired === null || repaired === "" || (Array.isArray(repaired) && repaired.length === 0);
+		if (optional && empty && !Value.Check(child as TSchema, repaired)) continue;
 		out[key] = repaired;
 	}
+	// A required list the model left out is an empty list, not a failed call: nothing is invented.
+	for (const key of node.required ?? []) {
+		if (out[key] === undefined && value[key] === undefined && types(properties[key] ?? {}).includes("array") && Value.Check(properties[key] as TSchema, [])) out[key] = [];
+	}
 	if (node.additionalProperties === false) return out;
-	for (const [key, item] of Object.entries(value)) if (!(key in out) && !taken.has(key)) out[key] = item;
+	// Fields the schema does not declare: kept, and repaired when it says what they must be.
+	const extra = isRecord(node.additionalProperties) ? node.additionalProperties : undefined;
+	for (const [key, item] of Object.entries(value)) {
+		if (key in properties || taken.has(key)) continue;
+		out[key] = extra ? fix(extra, item, options, depth + 1) : item;
+	}
 	return out;
 }
 

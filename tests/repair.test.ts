@@ -61,3 +61,30 @@ test("repairToolArgs runs the tool's own repair first, then the schema's", () =>
 	assert.deepEqual(registered[0].prepareArguments({ to: "qa", kind: "reply", text: "ok" }), { to: "qa", kind: "info", body: "ok" });
 	assert.equal(registered[1].prepareArguments, undefined, "a tool without parameters is left alone");
 });
+
+test("an empty optional field is dropped, not resent; open records repair their values", () => {
+	const Jobs = { type: "object", properties: { action: { type: "string", enum: ["status", "result"] }, jobId: { type: "string", maxLength: 128 }, message: { type: "string", minLength: 1 } }, required: ["action"] };
+	assert.deepEqual(repairArgs(Jobs, { action: "status", jobId: "", message: "" }), { action: "status", jobId: "" });
+	const Tags = { type: "object", properties: { tags: { type: "object", additionalProperties: { type: "string" } } } };
+	assert.deepEqual(repairArgs(Tags, { tags: { defects: ["a", "b"], level: 2 } }), { tags: { defects: "a\nb", level: "2" } });
+});
+
+test("common enum words, ranged line numbers, object items as text, empty optional lists", () => {
+	const Report = Type.Object({
+		criteria: Type.Array(Type.Object({ met: Type.Union([Type.Literal("yes"), Type.Literal("no"), Type.Literal("unknown")]) })),
+		files: Type.Optional(Type.Array(Type.Object({ path: Type.String(), action: Type.Union([Type.Literal("created"), Type.Literal("modified"), Type.Literal("deleted")]) }), { minItems: 1 })),
+		findings: Type.Array(Type.Object({ line: Type.Optional(Type.Integer({ minimum: 1 })) })),
+		blockers: Type.Array(Type.String()),
+	});
+	const repaired = repairArgs(Report, {
+		criteria: [{ met: "partial" }, { met: true }], files: [], findings: [{ line: "8-39" }],
+		blockers: [{ blocker: "no access", need: "read /tmp" }],
+	});
+	assert.deepEqual(repaired, { criteria: [{ met: "unknown" }, { met: "yes" }], findings: [{ line: 8 }], blockers: ["no access — read /tmp"] });
+	assert.ok(Value.Check(Report, repaired));
+});
+
+test("a required list left out becomes empty only when empty is valid", () => {
+	const Schema = Type.Object({ blockers: Type.Array(Type.String()), files: Type.Array(Type.String(), { minItems: 1 }) });
+	assert.deepEqual(repairArgs(Schema, {}), { blockers: [] }, "files must have items, so it stays missing and validation names it");
+});
