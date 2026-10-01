@@ -142,3 +142,11 @@ test("a change with prose but no usable files is delivered as an answer", () => 
 	// A valid change stays a change.
 	assert.deepEqual(repairReply({ ...change, explanation: "Why." }), { ...change, explanation: "Why." });
 });
+
+test("schemaForModel keeps the shape and the descriptions, and drops the limits", async () => {
+	const { schemaForModel } = await import("../src/index.ts");
+	const { Type } = await import("typebox");
+	const full = Type.Object({ name: Type.String({ maxLength: 10, description: "who" }), tags: Type.Array(Type.String(), { maxItems: 3 }) });
+	assert.deepEqual(JSON.parse(JSON.stringify(schemaForModel(full))).properties, { name: { type: "string", description: "who" }, tags: { type: "array", items: { type: "string" } } });
+	assert.equal(JSON.stringify(schemaForModel(full, { descriptions: false })).includes("who"), false);
+});

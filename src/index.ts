@@ -50,6 +50,7 @@ export {
 	replyLines,
 	replyProblems,
 	replySchema,
+	schemaForModel,
 	salvageReply,
 	type AnswerReply,
 	type BlockedReply,
@@ -64,3 +65,4 @@ export { createForm, openForm, type FormField, type FormSpec, type FormValues } 
 export { createChecklist, openChecklist, type ChecklistItem, type ChecklistResult, type ChecklistSpec } from "./checklist.ts";
 export { ENGLISH_RULE, ENGLISH_SYSTEM, cheapComplete, cheapestModel, isEnglish, sessionComplete, toEnglishFields, toEnglishInstructions, type Complete } from "./english.ts";
 export { repairArgs, repairToolArgs, type RepairOptions } from "./repair.ts";
+export { JEV_MODEL } from "./jev.ts";
