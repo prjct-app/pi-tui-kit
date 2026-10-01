@@ -102,12 +102,24 @@ export type Reply = ChangeReply | AnswerReply | DiagnosisReply | NeedsInputReply
  * each field holds. Paid on every request, so the reply tool sends only the
  * shape: types, required fields, closed sets.
  */
-const NOT_FOR_THE_MODEL = new Set(["description", "maxLength", "minLength", "maxItems", "minItems", "minimum", "maximum"]);
-const shapeOnly = (schema: unknown): unknown => {
-	if (Array.isArray(schema)) return schema.map(shapeOnly);
+const NOT_FOR_THE_MODEL = new Set(["maxLength", "minLength", "maxItems", "minItems", "minimum", "maximum"]);
+const strip = (schema: unknown, drop: ReadonlySet<string>): unknown => {
+	if (Array.isArray(schema)) return schema.map(item => strip(item, drop));
 	if (typeof schema !== "object" || schema === null) return schema;
-	return Object.fromEntries(Object.entries(schema).filter(([key]) => !NOT_FOR_THE_MODEL.has(key)).map(([key, value]) => [key, shapeOnly(value)]));
+	return Object.fromEntries(Object.entries(schema).filter(([key]) => !drop.has(key)).map(([key, value]) => [key, strip(value, drop)]));
 };
+const shapeOnly = (schema: unknown): unknown => strip(schema, new Set([...NOT_FOR_THE_MODEL, "description"]));
+
+/**
+ * The schema a tool shows the model: limits removed (they cost tokens on every
+ * request and the tool validates its input with the full schema anyway).
+ * Descriptions stay unless `descriptions: false`. Use it only for a tool whose
+ * execute checks the full schema, as Pi then validates against this one.
+ */
+export function schemaForModel<T extends TSchema>(schema: T, options: { descriptions?: boolean } = {}): T {
+	const drop = options.descriptions === false ? new Set([...NOT_FOR_THE_MODEL, "description"]) : NOT_FOR_THE_MODEL;
+	return Type.Unsafe<Static<T>>(strip(JSON.parse(JSON.stringify(schema)), drop) as object) as unknown as T;
+}
 
 /**
  * The schema a reply tool declares: every kind this caller accepts, as one
