@@ -1,6 +1,6 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import { SYMBOL } from "./style.ts";
+import { SYMBOL, spread } from "./style.ts";
 
 /**
  * A mode is anything a person turns on and off (plan, fast, agents). Each
@@ -8,15 +8,25 @@ import { SYMBOL } from "./style.ts";
  * line right above the editor. An extension never draws its own mode line.
  */
 export const MODE_PREFIX = "mode:";
+/**
+ * A fact is a short live figure, not something turned on (what the session
+ * cost). It shares the mode line, right-aligned and quiet, so it never adds a
+ * line of its own.
+ */
+export const FACT_PREFIX = "fact:";
 
-type Registry = { modes: Map<string, string>; listeners: Set<() => void>; line?: string };
+type Registry = { modes: Map<string, string>; facts?: Map<string, string>; listeners: Set<() => void>; line?: string };
 // Every extension bundles its own copy of this kit; the process-wide symbol is
 // the one place they all share.
 const KEY = Symbol.for("prjct.pi-tui-kit.modes");
 function registry(): Registry {
 	const scope = globalThis as unknown as Record<symbol, Registry | undefined>;
-	return (scope[KEY] ??= { modes: new Map(), listeners: new Set() });
+	const shared: Registry = (scope[KEY] ??= { modes: new Map(), listeners: new Set() });
+	// A registry an older copy of the kit made has no facts yet.
+	shared.facts ??= new Map();
+	return shared;
 }
+const factsOf = (shared: Registry): Map<string, string> => (shared.facts ??= new Map());
 
 /**
  * Publish a mode, or clear it with undefined. `label` is short plain text
@@ -38,24 +48,42 @@ export function setMode(ctx: Pick<ExtensionContext, "ui" | "hasUI">, name: strin
 }
 
 /**
+ * Publish a fact, or clear it with undefined. `text` is short plain text
+ * ("$0.05 session · $277.74 project"); it is drawn dim at the right of the mode line.
+ */
+export function setFact(ctx: Pick<ExtensionContext, "ui" | "hasUI">, name: string, text: string | undefined): void {
+	if (!ctx.hasUI) return;
+	const shared = registry();
+	const facts = factsOf(shared);
+	if (facts.get(name) !== text) {
+		if (text === undefined) facts.delete(name);
+		else facts.set(name, text);
+		for (const listener of shared.listeners) listener();
+	}
+	ctx.ui.setStatus(`${FACT_PREFIX}${name}`, text);
+	showModeLine(ctx);
+}
+
+/**
  * The mode line lives here, in one place: right above the editor, drawn once
- * for the whole process however many extensions publish modes. It takes no
- * space while no mode is on.
+ * for the whole process however many extensions publish modes and facts. It
+ * takes no space while there is neither.
  */
 export const MODE_LINE_WIDGET = "prjct-modes";
 function showModeLine(ctx: Pick<ExtensionContext, "ui">): void {
 	const shared = registry();
-	const key = [...shared.modes.keys()].sort().join("|");
+	const facts = factsOf(shared);
+	const key = [...shared.modes.keys(), ...[...facts.keys()].map(name => `${FACT_PREFIX}${name}`)].sort().join("|");
 	if (shared.line === key) return;
 	shared.line = key;
-	if (!shared.modes.size) { ctx.ui.setWidget(MODE_LINE_WIDGET, undefined); return; }
+	if (!shared.modes.size && !facts.size) { ctx.ui.setWidget(MODE_LINE_WIDGET, undefined); return; }
 	ctx.ui.setWidget(MODE_LINE_WIDGET, (tui, theme) => {
 		const stop = onModes(() => tui.requestRender());
 		return {
 			dispose: stop,
 			invalidate() {},
 			render(width: number): string[] {
-				const line = modeLine(theme, currentModes());
+				const line = modeLine(theme, currentModes(), currentFacts(), width);
 				return line ? [truncateToWidth(line, width, "")] : [];
 			},
 		};
@@ -67,7 +95,12 @@ export function currentModes(): string[] {
 	return [...registry().modes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, value]) => value);
 }
 
-/** Called whenever a mode changes. Returns an unsubscribe. */
+/** The published facts, in a stable order. */
+export function currentFacts(): string[] {
+	return [...factsOf(registry()).entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, value]) => value);
+}
+
+/** Called whenever a mode or a fact changes. Returns an unsubscribe. */
 export function onModes(listener: () => void): () => void {
 	const shared = registry();
 	shared.listeners.add(listener);
@@ -82,8 +115,13 @@ export function readModes(statuses: ReadonlyMap<string, string>): string[] {
 		.map(([, value]) => value);
 }
 
-/** The one mode line: modes joined by a quiet divider, or nothing when none is on. */
-export function modeLine(theme: Theme, modes: readonly string[]): string | undefined {
-	if (modes.length === 0) return undefined;
-	return ` ${modes.join(theme.fg("dim", "  ·  "))}`;
+/**
+ * The one mode line: modes joined by a quiet divider on the left, facts dim on
+ * the right (the modes give way first), or nothing when there is neither.
+ */
+export function modeLine(theme: Theme, modes: readonly string[], facts: readonly string[] = [], width?: number): string | undefined {
+	if (modes.length === 0 && facts.length === 0) return undefined;
+	const left = modes.length ? ` ${modes.join(theme.fg("dim", "  ·  "))}` : "";
+	if (!facts.length || width === undefined) return left || undefined;
+	return spread(left, theme.fg("dim", `${facts.join("  ·  ")} `), width);
 }

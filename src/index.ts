@@ -21,7 +21,7 @@ export {
 	type ResolvedKey,
 	type SecretStore,
 } from "./typesafe-credentials.ts";
-export { MODE_LINE_WIDGET, MODE_PREFIX, currentModes, modeLine, onModes, readModes, setMode } from "./modes.ts";
+export { FACT_PREFIX, MODE_LINE_WIDGET, MODE_PREFIX, currentFacts, currentModes, modeLine, onModes, readModes, setFact, setMode } from "./modes.ts";
 export {
 	RESERVED_KEYS,
 	createPanel,

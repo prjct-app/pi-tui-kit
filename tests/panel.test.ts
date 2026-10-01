@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { MODE_PREFIX, ON_OFF, currentModes, onModes, ago, brand, completer, row, rowLine, createPanel, createSecretPrompt, modeLine, panelHeight, panelText, readModes, setMode, spread, type PanelSpec } from "../src/index.ts";
+import { FACT_PREFIX, MODE_PREFIX, ON_OFF, currentFacts, currentModes, setFact, onModes, ago, brand, completer, row, rowLine, createPanel, createSecretPrompt, modeLine, panelHeight, panelText, readModes, setMode, spread, type PanelSpec } from "../src/index.ts";
 
 const theme: any = {
 	fg: (_tone: string, text: string) => text,
@@ -143,6 +143,29 @@ test("modes share one prefix and one line", () => {
 	assert.deepEqual(modes, ["◆ agents ● 1", "◆ plan"]);
 	assert.equal(modeLine(theme, modes), " ◆ agents ● 1  ·  ◆ plan");
 	assert.equal(modeLine(theme, []), undefined);
+});
+
+test("facts share the mode line, dim on the right, and keep it up with no mode on", (t) => {
+	const widgets: any[] = [];
+	const statuses: Array<[string, string | undefined]> = [];
+	const ctx: any = { hasUI: true, ui: { theme, setStatus: (key: string, value: string | undefined) => statuses.push([key, value]), setWidget: (key: string, factory: any, options: any) => widgets.push({ key, factory, options }) } };
+	// The registry is process-wide: clear what earlier tests left on.
+	setMode(ctx, "plan", undefined);
+	t.after(() => setFact(ctx, "usage", undefined));
+	setFact(ctx, "usage", "$0.05 session · $277.74 project");
+	assert.deepEqual(statuses.at(-1), [`${FACT_PREFIX}usage`, "$0.05 session · $277.74 project"]);
+	assert.ok(currentFacts().includes("$0.05 session · $277.74 project"));
+	const shown = widgets.at(-1);
+	assert.equal(shown.key, "prjct-modes");
+	const [alone] = shown.factory({ requestRender() {} }, theme).render(60);
+	assert.equal(alone, `${" ".repeat(60 - 32)}$0.05 session · $277.74 project `, "a fact alone sits at the right");
+	setMode(ctx, "plan", "plan 2/5");
+	const [both] = widgets.at(-1).factory({ requestRender() {} }, theme).render(60);
+	assert.match(both, /^ ◆ plan 2\/5 +\$0\.05 session · \$277\.74 project $/);
+	assert.equal(modeLine(theme, ["◆ plan"], ["$1.00"], 20), " ◆ plan       $1.00 ");
+	setMode(ctx, "plan", undefined);
+	setFact(ctx, "usage", undefined);
+	assert.equal(widgets.at(-1).factory, undefined, "no mode and no fact, no line");
 });
 
 test("the shared secret prompt is docked, masks input, and validates before submit", async () => {
