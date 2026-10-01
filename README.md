@@ -116,3 +116,21 @@ import { setFact } from "@prjct.app/pi-tui-kit";
 setFact(ctx, "usage", "$0.05 session · $277.74 project");
 setFact(ctx, "usage", undefined); // gone
 ```
+
+## Argument repair
+
+Models send near misses: `{ "label": "Sí" }` where a string belongs, `"3"` for 3, a single value where a list belongs, `Question` for `question`, a limit above its maximum, a field under another name, the whole call as a JSON string. Each one fails validation, and the model usually resends the same call.
+
+One line in an extension's factory puts a schema-driven repair in front of Pi's validation for every tool it registers. It runs after the tool's own `prepareArguments`:
+
+```ts
+import { repairToolArgs } from "@prjct.app/pi-tui-kit";
+
+repairToolArgs(pi, {
+  team_message: { aliases: { body: ["message", "text"] }, synonyms: { answer: "info" }, truncate: true },
+});
+```
+
+- **Shape only, never meaning.** A required field the model did not write stays missing, so validation still names it. Valid input comes back untouched.
+- **`truncate`** cuts text over `maxLength` with a marker instead of refusing it. Turn it on only for reports and messages, never for content written to files.
+- **Plain JSON Schema works too,** as MCP servers send it.
