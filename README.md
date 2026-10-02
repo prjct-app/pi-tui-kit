@@ -1,10 +1,16 @@
 # pi-tui-kit
 
+[![pi-tui-kit — for PI Agent](https://raw.githubusercontent.com/prjct-app/pi-tui-kit/main/docs/cover.png)](https://pi.dev)
+
 The one TUI every prjct Pi extension uses: minimal, consistent, and actionable.
 
-Local only, never published to npm. Each extension depends on it as a sibling
-checkout (`"@prjct.app/pi-tui-kit": "file:../pi-tui-kit"`) and bundles it into
-its build; `~/Apps/pi/install-local.sh` builds the kit and installs everything.
+A shared runtime library for npm. Extensions declare
+`@prjct.app/pi-tui-kit` in `dependencies`; Pi installs it with the extension.
+It does not register extensions, skills, prompts, or themes, so it is not a
+standalone Pi gallery package.
+
+For local development, `~/Apps/pi/install-local.sh` builds the sibling checkout
+and the extensions that use it.
 
 ## Rules
 

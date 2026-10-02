@@ -19,10 +19,10 @@ export type RowSpec = {
 	at?: number;
 };
 
-/** Same column as p-ui's built-in tool rows. */
+/** Same column as pi-ui's built-in tool rows. */
 const VERB_WIDTH = 8;
 
-/** The row as a string, the same grammar p-ui uses for built-in tools. */
+/** The row as a string, the same grammar pi-ui uses for built-in tools. */
 export function rowLine(theme: Theme, spec: RowSpec, width: number): string {
 	const verb = theme.fg("toolTitle", theme.bold(spec.verb.toUpperCase().slice(0, VERB_WIDTH).padEnd(VERB_WIDTH)));
 	const target = theme.fg("toolOutput", spec.target.replace(/\r?\n/g, " ↵ "));
