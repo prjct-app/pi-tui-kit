@@ -4,7 +4,7 @@ import { SYMBOL, spread } from "./style.ts";
 
 /**
  * A mode is anything a person turns on and off (plan, fast, agents). Each
- * extension publishes its own with setMode, and p-ui draws all of them on one
+ * extension publishes its own with setMode, and pi-ui draws all of them on one
  * line right above the editor. An extension never draws its own mode line.
  */
 export const MODE_PREFIX = "mode:";
