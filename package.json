@@ -1,6 +1,6 @@
 {
   "name": "@prjct.app/pi-tui-kit",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "One minimal, actionable TUI for every prjct Pi extension: a docked list/detail panel with one-key actions, and one line for active modes.",
   "type": "module",
   "keywords": [

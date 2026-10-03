@@ -30,12 +30,14 @@ const factsOf = (shared: Registry): Map<string, string> => (shared.facts ??= new
 
 /**
  * Publish a mode, or clear it with undefined. `label` is short plain text
- * ("plan 2/5", "fast", "agents ● 1"); the symbol and color are added here so
- * every mode looks the same.
+ * ("plan 2/5", "fast", "agents ● 1"); the symbol is added here and the color
+ * when the line is drawn, so every mode looks the same and follows the
+ * palette: a color baked in at publish time stayed on the old palette until
+ * the extension happened to publish again.
  */
 export function setMode(ctx: Pick<ExtensionContext, "ui" | "hasUI">, name: string, label: string | undefined): void {
 	if (!ctx.hasUI) return;
-	const text = label === undefined ? undefined : ctx.ui.theme.fg("accent", `${SYMBOL.mode} ${label}`);
+	const text = label === undefined ? undefined : `${SYMBOL.mode} ${label}`;
 	const shared = registry();
 	if (shared.modes.get(name) !== text) {
 		if (text === undefined) shared.modes.delete(name);
@@ -115,13 +117,17 @@ export function readModes(statuses: ReadonlyMap<string, string>): string[] {
 		.map(([, value]) => value);
 }
 
+/** Already colored: published by an older copy of this kit that painted at publish time. */
+const painted = (text: string): boolean => text.includes("\x1b[");
+
 /**
  * The one mode line: modes joined by a quiet divider on the left, facts dim on
  * the right (the modes give way first), or nothing when there is neither.
+ * Colors come from `theme` now, so a palette change repaints every mode.
  */
 export function modeLine(theme: Theme, modes: readonly string[], facts: readonly string[] = [], width?: number): string | undefined {
 	if (modes.length === 0 && facts.length === 0) return undefined;
-	const left = modes.length ? ` ${modes.join(theme.fg("dim", "  ·  "))}` : "";
+	const left = modes.length ? ` ${modes.map((mode) => painted(mode) ? mode : theme.fg("accent", mode)).join(theme.fg("dim", "  ·  "))}` : "";
 	if (!facts.length || width === undefined) return left || undefined;
 	return spread(left, theme.fg("dim", `${facts.join("  ·  ")} `), width);
 }

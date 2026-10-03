@@ -239,3 +239,21 @@ test("modes are shared across bundled copies of the kit through one process regi
 	assert.equal(widgets.at(-1).factory, undefined, "no mode, no line");
 	stop();
 });
+
+test("modes follow the palette: painted when drawn, not when published", () => {
+	// A live theme, like Pi's: the same object answers with the palette in use.
+	let accent = "\x1b[31m";
+	const live: any = { fg: (color: string, text: string) => color === "accent" ? `${accent}${text}\x1b[39m` : text, bold: (text: string) => text };
+	const widgets: any[] = [];
+	const statuses: Array<[string, string | undefined]> = [];
+	const ctx: any = { hasUI: true, ui: { theme: live, setStatus: (key: string, value: string | undefined) => statuses.push([key, value]), setWidget: (key: string, factory: any) => widgets.push({ key, factory }) } };
+	setMode(ctx, "plan", "plan 2/5");
+	assert.deepEqual(statuses.at(-1), [`${MODE_PREFIX}plan`, "◆ plan 2/5"], "published as plain text");
+	const line = widgets.at(-1).factory({ requestRender() {} }, live);
+	assert.ok(line.render(40)[0].includes("\x1b[31m◆ plan 2/5"));
+	accent = "\x1b[32m"; // the person picks another palette
+	assert.ok(line.render(40)[0].includes("\x1b[32m◆ plan 2/5"), "the same line repaints in the new accent");
+	// A mode an older copy of the kit published already colored is drawn as it came.
+	assert.equal(modeLine(live, ["\x1b[35m◆ old\x1b[39m"]), " \x1b[35m◆ old\x1b[39m");
+	setMode(ctx, "plan", undefined);
+});
