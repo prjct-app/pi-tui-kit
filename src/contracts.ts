@@ -355,7 +355,8 @@ export function repairReply(raw: unknown, rules: ReplyRules = {}): unknown {
 	const schema = SCHEMAS[kind] as unknown as Node;
 	// `"answer": { "answer": "…", "refs": "" }`: the reply nested in its own lead field.
 	const inner = value[lead];
-	const flat = isRecord(inner) ? { ...value, ...inner } : value;
+	const nested = isRecord(inner) ? { ...value, ...inner } : value;
+	const flat = kind === "answer" ? withRefs(nested) : nested;
 	const repaired = { ...(repairObject(schema, lead in PROSE_LEADS ? withLead(flat, lead) : flat) as Record<string, unknown>), kind };
 	if (kind === "change" && kinds.includes("answer")) return changeAsAnswer(flat, repaired) ?? repaired;
 	return repaired;
@@ -379,6 +380,16 @@ const changeAsAnswer = (value: Record<string, unknown>, change: Record<string, u
 	if (!lines.length) return undefined;
 	const refs = repair(AnswerReplySchema.properties.refs as unknown as Node, value.files);
 	return { ...(repairObject(AnswerReplySchema as unknown as Node, { answer: lines.join("\n"), refs }) as Record<string, unknown>), kind: "answer" };
+};
+
+/**
+ * An answer that lists the files it touched as `files` (a change's field)
+ * keeps them as its refs instead of dropping them.
+ */
+const withRefs = (value: Record<string, unknown>): Record<string, unknown> => {
+	if (value.files === undefined || (Array.isArray(value.refs) && value.refs.length)) return value;
+	const { files, ...rest } = value;
+	return { ...rest, refs: files };
 };
 
 /** The prose another kind's lead carries: a needs_input that wrote its question as `answer`. */

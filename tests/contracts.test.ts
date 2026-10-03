@@ -150,3 +150,14 @@ test("schemaForModel keeps the shape and the descriptions, and drops the limits"
 	assert.deepEqual(JSON.parse(JSON.stringify(schemaForModel(full))).properties, { name: { type: "string", description: "who" }, tags: { type: "array", items: { type: "string" } } });
 	assert.equal(JSON.stringify(schemaForModel(full, { descriptions: false })).includes("who"), false);
 });
+
+test("an answer that lists its files as `files` keeps them as refs", () => {
+	// MiniMax-M3, 2026-10-03: the file list was dropped.
+	const reply = repairReply({ kind: "answer", explanation: "Methodology edited.", files: ["docs/methodology.md", "docs/project/work/tasks/PRJ-T317.md:12"] });
+	assert.deepEqual(replyProblems(reply), []);
+	assert.deepEqual((reply as { refs: unknown }).refs, [{ path: "docs/methodology.md" }, { path: "docs/project/work/tasks/PRJ-T317.md", line: 12 }]);
+	assert.equal((reply as { answer: string }).answer, "Methodology edited.");
+	// Refs the model did give win over files.
+	const both = repairReply({ kind: "answer", answer: "x", refs: [{ path: "a.ts" }], files: ["b.ts"] }) as { refs: { path: string }[] };
+	assert.deepEqual(both.refs.map((r) => r.path), ["a.ts"]);
+});
