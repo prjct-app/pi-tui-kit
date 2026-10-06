@@ -89,5 +89,5 @@ test("schemas expose the constraints that execution enforces", async () => {
   const full = Type.Object({ name: Type.String({ maxLength: 10, description: "who" }), tags: Type.Array(Type.String(), { maxItems: 3 }) });
   assert.deepEqual(schemaForModel(full), full);
   assert.equal(JSON.stringify(schemaForModel(full, { descriptions: false })).includes("who"), false);
-  assert.equal(schemaForModel(full, { descriptions: false }).properties.name.maxLength, 10);
+  assert.equal(JSON.parse(JSON.stringify(schemaForModel(full, { descriptions: false }))).properties.name.maxLength, 10);
 });
