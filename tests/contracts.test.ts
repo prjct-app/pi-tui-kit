@@ -49,115 +49,45 @@ test("the contract orders a reply, it does not censor its content", () => {
 	assert.ok(isReply({ ...change, explanation: "Why it was needed." }));
 });
 
-test("repair fixes the shapes models send without strict sampling", () => {
-	const answer = "`git branch` marks the current branch with `*`.";
-	// Observed from MiniMax-M3: every one of these looped on validation before.
-	const sent: unknown[] = [
-		{ kind: "answer", answer, refs: "" },
-		{ kind: "answer", answer, refs: [""] },
-		{ kind: "answer", answer, refs: [{ path: "" }] },
-		{ kind: "answer", answer, refs: { item: "" } },
-		{ kind: "answer", answer },
-		{ kind: "answer", answer: { answer, refs: "" } },
-		JSON.stringify({ kind: "answer", answer, refs: [] }),
-		{ reply: { kind: "Answer", answer, refs: "none" } },
-		{ kind: "answer", text: answer },
-		{ answer, refs: [], extra: "dropped" },
-		{ kind: "answer", explanation: answer },
-	];
-	for (const raw of sent) {
-		assert.deepEqual(repairReply(raw), { kind: "answer", answer, refs: [] }, JSON.stringify(raw));
-	}
+test("valid replies and literal content are preserved exactly", () => {
+  assert.equal(repairReply(change), change);
+  const reply = { kind: "answer", answer: '  {"literal": "\\u00e9"}  ', refs: [] };
+  assert.equal(repairReply(reply), reply);
+  assert.deepEqual(repairReply(JSON.stringify(reply)), reply);
+  assert.deepEqual(repairReply({ reply: { ...reply, kind: "Answer" } }), reply);
 });
 
-test("repair coerces fields by the schema of the kind", () => {
-	assert.deepEqual(repairReply({ kind: "answer", answer: "See it.", refs: ["src/a.ts:12", { path: "src/b.ts", line: "7" }, { path: "src/c.ts", line: 0 }] }),
-		{ kind: "answer", answer: "See it.", refs: [{ path: "src/a.ts", line: 12 }, { path: "src/b.ts", line: 7 }, { path: "src/c.ts" }] });
-	assert.deepEqual(repairReply({
-		kind: "change",
-		files: { path: "src/a.ts", action: "Added", what: "retry" },
-		checks: [{ command: "npm test", passed: "yes" }],
-		pending: "none",
-		explanation: "",
-	}), {
-		kind: "change",
-		files: [{ path: "src/a.ts", action: "created", what: "retry" }],
-		checks: [{ command: "npm test", passed: true }],
-		pending: [],
-	});
-	assert.deepEqual(repairReply({ kind: "needs-input", question: "Keep it?", options: "keep" }),
-		{ kind: "needs_input", question: "Keep it?", options: ["keep"] });
-	assert.deepEqual(repairReply({ kind: "diagnosis", cause: "Stale key", evidence: ["src/cache.ts:4"], fix: "proposed" }),
-		{ kind: "diagnosis", cause: "Stale key", evidence: [{ path: "src/cache.ts", line: 4 }], fix: { status: "proposed", files: [] } });
+test("missing, invalid or extra evidence is returned for model correction", () => {
+  for (const reply of [
+    { kind: "answer", answer: "done" },
+    { kind: "answer", answer: "done", refs: [], critical: "migration deletes data" },
+    { kind: "change", files: [], checks: [{command: "test", passed: 2}], pending: [] },
+    { kind: "answer", answer: "done", refs: [{path: "src/a.ts", line: "8-39"}] },
+  ]) {
+    assert.deepEqual(repairReply(reply), reply);
+    assert.ok(replyProblems(reply).length > 0);
+  }
 });
 
-test("repair never invents content, so validation still names what is missing", () => {
-	assert.ok(replyProblems(repairReply({ kind: "change", files: ["src/a.ts"], checks: [], pending: [] })).length > 0);
-	assert.ok(replyProblems(repairReply({ kind: "answer", refs: [] })).length > 0);
-	assert.deepEqual(replyProblems(repairReply({ kind: "essay" })), ["kind: must be one of change, answer, diagnosis, needs_input, blocked"]);
-	assert.deepEqual(repairReply("not json"), "not json");
-	assert.deepEqual(repairReply(change), change);
-	assert.deepEqual(replyProblems(repairReply(change, { kinds: ["answer"] }), { kinds: ["answer"] }), ["kind: must be one of answer"]);
+test("long replies and complete evidence lists have no arbitrary upper bound", () => {
+  const reply = { kind: "answer", answer: "x".repeat(50000) + "CRITICAL_TAIL", refs: Array.from({length: 60}, (_, i) => ({path: `src/${i}.ts`})) };
+  assert.ok(isReply(reply));
+  assert.equal(repairReply(reply), reply);
+  assert.ok(isReply({ ...change, checks: Array.from({length: 30}, (_, i) => ({command: `test ${i}`, passed: false})) }));
 });
 
-test("salvage turns any reply into a plain answer, bounded", () => {
-	assert.deepEqual(salvageReply({ kind: "answer", answer: { text: "Done." }, refs: 3 }), { kind: "answer", answer: "Done.", refs: [] });
-	assert.deepEqual(salvageReply({}), { kind: "answer", answer: "The reply arrived without any text.", refs: [] });
-	const long = salvageReply({ kind: "blocked", reason: "x".repeat(12500) });
-	assert.equal(long.answer.length, 12000);
-	assert.equal(long.explanation?.length, 500);
-	assert.ok(isReply(long));
+test("fallback preserves every field and the entire long tail", () => {
+  const raw = { kind: "blocked", reason: "x".repeat(50000) + "CRITICAL_TAIL", checked: false, attempts: 0, refs: [{path: "src/a.ts", line: 7}] };
+  const fallback = salvageReply(raw);
+  assert.deepEqual(JSON.parse(fallback.answer), raw);
+  assert.ok(isReply(fallback));
 });
 
-test("a long answer is delivered, not sent back to be shortened", () => {
-	// Observed from MiniMax-M3: a 2,000-character cap rejected real task reports.
-	assert.ok(isReply({ kind: "answer", answer: "x".repeat(6000), refs: [] }));
-	assert.ok(isReply({ kind: "needs_input", question: "q".repeat(1500), options: [] }));
-});
-
-test("repair opens lists wrapped in one-key objects and flattens nested lists", () => {
-	// Observed from MiniMax-M3 on 2026-09-29.
-	assert.deepEqual(repairReply({ kind: "answer", answer: "All green.", refs: [["../api/", "../web/"]] }),
-		{ kind: "answer", answer: "All green.", refs: [{ path: "../api/" }, { path: "../web/" }] });
-	assert.deepEqual(repairReply({ kind: "needs_input", question: "Which?", options: { item: { item: ["a", "b"] } } }),
-		{ kind: "needs_input", question: "Which?", options: ["a", "b"] });
-});
-
-test("a lead written under another kind's name still counts", () => {
-	assert.deepEqual(repairReply({ kind: "needs_input", answer: "Keep the flag?", options: ["keep", "drop"] }),
-		{ kind: "needs_input", question: "Keep the flag?", options: ["keep", "drop"] });
-});
-
-test("a change with prose but no usable files is delivered as an answer", () => {
-	// Observed from MiniMax-M3: `files` missing, or bare paths wrapped in `{ item: [...] }`.
-	assert.deepEqual(repairReply({ kind: "change", explanation: "Block 1 done; 30/30 tests pass." }),
-		{ kind: "answer", answer: "Block 1 done; 30/30 tests pass.", refs: [] });
-	const wrapped = repairReply({ kind: "change", files: { item: ["src/a.ts", "src/b.ts"] }, checks: [{ command: "npm test", passed: true }], pending: ["review"], explanation: "Scaffolded the package." });
-	assert.deepEqual(wrapped, { kind: "answer", answer: "Scaffolded the package.\n✓ npm test\npending: review", refs: [{ path: "src/a.ts" }, { path: "src/b.ts" }] });
-	assert.ok(isReply(wrapped));
-	// Prose under another kind's field, or only checks and pending items: still the model's own words.
-	assert.deepEqual(repairReply({ kind: "change", answer: "Preview is up on :3300." }), { kind: "answer", answer: "Preview is up on :3300.", refs: [] });
-	assert.deepEqual(repairReply({ kind: "change", files: "[]", checks: [{ command: "audit", passed: true }], pending: ["migrate realtime"] }),
-		{ kind: "answer", answer: "✓ audit\npending: migrate realtime", refs: [] });
-	// A valid change stays a change.
-	assert.deepEqual(repairReply({ ...change, explanation: "Why." }), { ...change, explanation: "Why." });
-});
-
-test("schemaForModel keeps the shape and the descriptions, and drops the limits", async () => {
-	const { schemaForModel } = await import("../src/index.ts");
-	const { Type } = await import("typebox");
-	const full = Type.Object({ name: Type.String({ maxLength: 10, description: "who" }), tags: Type.Array(Type.String(), { maxItems: 3 }) });
-	assert.deepEqual(JSON.parse(JSON.stringify(schemaForModel(full))).properties, { name: { type: "string", description: "who" }, tags: { type: "array", items: { type: "string" } } });
-	assert.equal(JSON.stringify(schemaForModel(full, { descriptions: false })).includes("who"), false);
-});
-
-test("an answer that lists its files as `files` keeps them as refs", () => {
-	// MiniMax-M3, 2026-10-03: the file list was dropped.
-	const reply = repairReply({ kind: "answer", explanation: "Methodology edited.", files: ["docs/methodology.md", "docs/project/work/tasks/PRJ-T317.md:12"] });
-	assert.deepEqual(replyProblems(reply), []);
-	assert.deepEqual((reply as { refs: unknown }).refs, [{ path: "docs/methodology.md" }, { path: "docs/project/work/tasks/PRJ-T317.md", line: 12 }]);
-	assert.equal((reply as { answer: string }).answer, "Methodology edited.");
-	// Refs the model did give win over files.
-	const both = repairReply({ kind: "answer", answer: "x", refs: [{ path: "a.ts" }], files: ["b.ts"] }) as { refs: { path: string }[] };
-	assert.deepEqual(both.refs.map((r) => r.path), ["a.ts"]);
+test("schemas expose the constraints that execution enforces", async () => {
+  const { schemaForModel } = await import("../src/index.ts");
+  const { Type } = await import("typebox");
+  const full = Type.Object({ name: Type.String({ maxLength: 10, description: "who" }), tags: Type.Array(Type.String(), { maxItems: 3 }) });
+  assert.deepEqual(schemaForModel(full), full);
+  assert.equal(JSON.stringify(schemaForModel(full, { descriptions: false })).includes("who"), false);
+  assert.equal(JSON.parse(JSON.stringify(schemaForModel(full, { descriptions: false }))).properties.name.maxLength, 10);
 });

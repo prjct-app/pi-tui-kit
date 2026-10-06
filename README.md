@@ -125,7 +125,7 @@ setFact(ctx, "usage", undefined); // gone
 
 ## Argument repair
 
-Models send near misses: `{ "label": "Sí" }` where a string belongs, `"3"` for 3, a single value where a list belongs, `Question` for `question`, a limit above its maximum, a field under another name, the whole call as a JSON string. Each one fails validation, and the model usually resends the same call.
+Models send near misses: `{ "label": "Sí" }` where a string belongs, `"3"` for 3, a single value where a list belongs, `Question` for `question`, a limit above its maximum, a field under another name, the whole call as a JSON string. Normalization handles representation only; unresolved validation errors return to the model.
 
 One line in an extension's factory puts a schema-driven repair in front of Pi's validation for every tool it registers. It runs after the tool's own `prepareArguments`:
 
@@ -133,10 +133,12 @@ One line in an extension's factory puts a schema-driven repair in front of Pi's 
 import { repairToolArgs } from "@prjct.app/pi-tui-kit";
 
 repairToolArgs(pi, {
-  team_message: { aliases: { body: ["message", "text"] }, synonyms: { answer: "info" }, truncate: true },
+  team_message: { aliases: { body: ["message", "text"] } },
 });
 ```
 
 - **Shape only, never meaning.** A required field the model did not write stays missing, so validation still names it. Valid input comes back untouched.
-- **`truncate`** cuts text over `maxLength` with a marker instead of refusing it. Turn it on only for reports and messages, never for content written to files.
+- **`truncate`** is deprecated and ignored. Text and arrays are never clipped, numbers are never clamped or rounded, and missing evidence is never synthesized.
 - **Plain JSON Schema works too,** as MCP servers send it.
+
+Model-facing schemas expose validation constraints. Structured replies have no arbitrary text or evidence-count caps. Repeated invalid replies fall back to complete serialized data, preserving every field and value.

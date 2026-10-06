@@ -1,18 +1,8 @@
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 
-/**
- * Arguments in the shape a tool's schema wants, from the near misses models
- * send: `{ "label": "Sí" }` where a string belongs, `"3"` for 3, a single
- * value where a list belongs, `"Open"` for `open`, a limit above its maximum,
- * extra fields, the whole thing as a JSON string. A model that gets a
- * validation error for one of these usually resends the same call, so each
- * near miss is a failed request, often several.
- *
- * Only the shape is fixed, never the meaning: a required field the model did
- * not write stays missing, so validation still names it. Valid input is
- * returned untouched.
- */
+/** Lossless schema normalization. Pi validates unresolved errors and the model
+ * decides how to correct them. Never discard evidence to make a call validate. */
 
 /** The JSON Schema subset TypeBox and MCP servers produce. */
 type Node = {
@@ -38,7 +28,7 @@ export type RepairOptions = {
 	readonly aliases?: Readonly<Record<string, readonly string[]>>;
 	/** Words models use for an enum value, by the value they mean: `{ answer: "info" }`. */
 	readonly synonyms?: Readonly<Record<string, string>>;
-	/** Cut strings over maxLength (with a marker) instead of letting validation refuse them. For reports and messages, never for content written to files. */
+	/** @deprecated Ignored. Oversized text is preserved for native validation. */
 	readonly truncate?: boolean;
 };
 
@@ -58,10 +48,8 @@ const TEXT_KEYS = ["label", "text", "value", "name", "title", "option", "item", 
 const asText = (value: unknown): string | undefined => {
 	if (typeof value === "string") return value;
 	if (typeof value === "number" || typeof value === "boolean") return String(value);
-	if (isRecord(value)) {
+	if (isRecord(value) && Object.keys(value).length === 1) {
 		for (const key of TEXT_KEYS) if (typeof value[key] === "string" || typeof value[key] === "number") return String(value[key]);
-		const parts = Object.values(value).filter((item): item is string | number => typeof item === "string" || typeof item === "number");
-		if (parts.length) return parts.join(" — ");
 	}
 	return undefined;
 };
@@ -78,17 +66,6 @@ const listInside = (value: unknown): unknown => {
 	return Array.isArray(current) ? current : value;
 };
 
-const EMPTY = new Set(["", "none", "n/a", "na", "null", "nil", "-", "[]"]);
-
-/** Words models use for common enum values everywhere, by the value they mean; a tool's own synonyms win. */
-const SYNONYMS: Readonly<Record<string, string>> = {
-	added: "created", add: "created", new: "created", create: "created",
-	updated: "modified", update: "modified", modify: "modified", changed: "modified", edited: "modified", edit: "modified",
-	removed: "deleted", remove: "deleted", delete: "deleted",
-	true: "yes", false: "no", met: "yes", "not met": "no", partial: "unknown", partially: "unknown", unclear: "unknown",
-};
-const MARK = "… [truncated]";
-
 function enumValue(node: Node, value: unknown, options: RepairOptions): unknown {
 	const allowed = node.enum ?? (node.const !== undefined ? [node.const] : undefined);
 	if (!allowed || allowed.includes(value)) return value;
@@ -97,14 +74,13 @@ function enumValue(node: Node, value: unknown, options: RepairOptions): unknown 
 	const lower = text.toLowerCase();
 	const exact = allowed.find(item => typeof item === "string" && item.toLowerCase() === lower);
 	if (exact !== undefined) return exact;
-	for (const meant of [options.synonyms?.[lower], SYNONYMS[lower]]) if (meant !== undefined && allowed.includes(meant)) return meant;
-	const loose = allowed.find(item => typeof item === "string" && item.toLowerCase().replace(/[\s_-]/gu, "") === lower.replace(/[\s_-]/gu, ""));
-	return loose ?? value;
+	const explicit = options.synonyms?.[lower];
+	return explicit !== undefined && allowed.includes(explicit) ? explicit : value;
 }
 
 function fix(node: Node, raw: unknown, options: RepairOptions, depth: number): unknown {
 	if (depth > 12) return raw;
-	const value = unstring(raw);
+	const value = types(node).includes("string") ? raw : unstring(raw);
 	const branches = node.anyOf ?? node.oneOf;
 	if (branches) return union(branches, value, options, depth);
 	if (node.enum || node.const !== undefined) return enumValue(node, value, options);
@@ -115,25 +91,18 @@ function fix(node: Node, raw: unknown, options: RepairOptions, depth: number): u
 		case "string": {
 			const text = asText(value) ?? (Array.isArray(value) && value.every(item => typeof item === "string") ? value.join("\n") : undefined);
 			if (text === undefined) return value;
-			if (options.truncate && node.maxLength !== undefined && text.length > node.maxLength) {
-				return text.slice(0, Math.max(0, node.maxLength - MARK.length)) + MARK;
-			}
+
 			return text;
 		}
 		case "number":
 		case "integer": {
-			const leading = typeof value === "string" ? /^\s*(-?\d+(?:\.\d+)?)/u.exec(value) : null;
-			const number = typeof value === "number" ? value
-				: typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value)
-					: kind === "integer" && leading ? Number(leading[1]) : undefined;
-			if (number === undefined) return value;
-			const whole = kind === "integer" ? Math.round(number) : number;
-			const low = node.minimum ?? (node.exclusiveMinimum !== undefined ? node.exclusiveMinimum + (kind === "integer" ? 1 : Number.EPSILON) : undefined);
-			const high = node.maximum ?? (node.exclusiveMaximum !== undefined ? node.exclusiveMaximum - (kind === "integer" ? 1 : Number.EPSILON) : undefined);
-			return Math.min(high ?? Infinity, Math.max(low ?? -Infinity, whole));
+			// Parse only the entire numeric string. Ranges, units, fractions and
+			// out-of-range values must not be rounded or clamped behind the model.
+			return typeof value === "string" && /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:e[+-]?\d+)?$/iu.test(value.trim())
+				&& Number.isFinite(Number(value)) ? Number(value) : value;
 		}
 		case "boolean": {
-			if (typeof value === "number") return value !== 0;
+			if (value === 0 || value === 1) return value === 1;
 			if (typeof value !== "string") return value;
 			const word = value.trim().toLowerCase();
 			return ["true", "yes", "y", "1", "on"].includes(word) ? true : ["false", "no", "n", "0", "off"].includes(word) ? false : value;
@@ -141,11 +110,10 @@ function fix(node: Node, raw: unknown, options: RepairOptions, depth: number): u
 		case "array": {
 			const inner = listInside(value);
 			const list = inner === undefined ? undefined
-				: inner === null || (typeof inner === "string" && EMPTY.has(inner.trim().toLowerCase())) ? []
-					: Array.isArray(inner) ? inner : [inner];
+				: inner === null ? undefined : Array.isArray(inner) ? inner : [inner];
 			if (list === undefined) return value;
 			const items = node.items ? list.map(item => fix(node.items!, item, options, depth + 1)) : list;
-			return node.maxItems !== undefined ? items.slice(0, node.maxItems) : items;
+			return items;
 		}
 		case "object": return object(node, value, options, depth);
 		default: return value;
@@ -168,17 +136,8 @@ function object(node: Node, value: unknown, options: RepairOptions, depth: numbe
 		const source = alias ? value[alias] : value[key];
 		if (source === undefined) continue;
 		const repaired = fix(child, source, options, depth + 1);
-		const optional = !(node.required ?? []).includes(key);
-		// An optional field that is empty or still off its schema is dropped instead of failing the call.
-		const empty = repaired === null || repaired === "" || (Array.isArray(repaired) && repaired.length === 0);
-		if (optional && empty && !Value.Check(child as TSchema, repaired)) continue;
 		out[key] = repaired;
 	}
-	// A required list the model left out is an empty list, not a failed call: nothing is invented.
-	for (const key of node.required ?? []) {
-		if (out[key] === undefined && value[key] === undefined && types(properties[key] ?? {}).includes("array") && Value.Check(properties[key] as TSchema, [])) out[key] = [];
-	}
-	if (node.additionalProperties === false) return out;
 	// Fields the schema does not declare: kept, and repaired when it says what they must be.
 	const extra = isRecord(node.additionalProperties) ? node.additionalProperties : undefined;
 	for (const [key, item] of Object.entries(value)) {
@@ -204,7 +163,7 @@ function union(branches: readonly Node[], value: unknown, options: RepairOptions
 	return value;
 }
 
-/** The arguments a tool meant, in its schema's shape. Valid input comes back as it is. */
+/** Normalize representation without inventing, clipping or deleting information. */
 export function repairArgs(schema: TSchema | object, raw: unknown, options: RepairOptions = {}): unknown {
 	try {
 		if (Value.Check(schema as TSchema, raw)) return raw;
