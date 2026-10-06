@@ -1,20 +1,7 @@
-/**
- * Every instruction one of our agents hands another is English.
- *
- * The person may write in any language; the subagent, Team Expert or QA agent
- * that receives the work reads one. Instructions written by a model are asked
- * for in English at the source (ENGLISH_RULE in tool descriptions); anything
- * that still arrives in another language, or that the person typed directly,
- * is rewritten into plain English by the session's own model before it is
- * delivered. The cheapest reachable model was used before: an unpriced free
- * route counted as the cheapest, and the person's words reached every agent
- * through it. The person's own conversation is never touched.
- *
- * Nothing is blocked: when no model can translate, the original goes through.
- */
+/** Explicit translation helpers; normal agent handoffs preserve source wording. */
 
-/** Appended to every tool description whose text reaches another agent. */
-export const ENGLISH_RULE = "Write it in plain, simple English, even when the person wrote in another language.";
+/** Legacy export name retained for consumers; it no longer asks agents to translate. */
+export const ENGLISH_RULE = "Preserve the original task language, verbatim quotes, identifiers and constraints. Write clearly.";
 
 // Function words, not vocabulary: a sentence about Spanish tooling may carry
 // Spanish nouns, but what betrays another language is its glue.
