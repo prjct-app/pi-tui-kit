@@ -3,24 +3,6 @@ export { BRAND, ON_OFF, brand, completer, type CommandOption } from "./commands.
 export { row, rowLine, type RowSpec } from "./row.ts";
 export { clock, stamp, type Speaker } from "./stamp.ts";
 export { createSecretPrompt, openSecretPrompt, type SecretPromptSpec } from "./secret-prompt.ts";
-export {
-	CREDENTIAL_STATES,
-	KEYRING_ACCOUNT,
-	KEYRING_SERVICE,
-	keyFingerprint,
-	keyHasValidShape,
-	keyringStoreFromEntries,
-	markKeyRejected,
-	markKeyVerified,
-	publicStatus,
-	removeKey,
-	resolveKey,
-	saveKey,
-	type CredentialState,
-	type KeyringEntry,
-	type ResolvedKey,
-	type SecretStore,
-} from "./typesafe-credentials.ts";
 export { FACT_PREFIX, MODE_LINE_WIDGET, MODE_PREFIX, currentFacts, currentModes, modeLine, onModes, readModes, setFact, setMode } from "./modes.ts";
 export {
 	RESERVED_KEYS,
@@ -65,4 +47,3 @@ export { createForm, openForm, type FormField, type FormSpec, type FormValues } 
 export { createChecklist, openChecklist, type ChecklistItem, type ChecklistResult, type ChecklistSpec } from "./checklist.ts";
 export { ENGLISH_RULE, ENGLISH_SYSTEM, cheapComplete, cheapestModel, isEnglish, sessionComplete, toEnglishFields, toEnglishInstructions, type Complete } from "./english.ts";
 export { repairArgs, repairToolArgs, type RepairOptions } from "./repair.ts";
-export { JEV_MODEL } from "./jev.ts";
