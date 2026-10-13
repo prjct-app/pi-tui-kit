@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.6 (2026-10-12)
+
+- Code: no `let` bindings; mutable state lives in one named object. Behaviour is unchanged.
+- Tests run with temporary Pi and prjct folders, so they never touch your real configuration.
+
 ## 0.3.5 (2026-10-06)
 
 - Preserve complete model evidence during argument normalization. Remove hidden reply size limits and lossy semantic guesses. Fall back to complete serialized data after repeated invalid replies.

@@ -55,14 +55,16 @@ const asText = (value: unknown): string | undefined => {
 };
 
 /** `{ "item": [...] }` and `{ "items": { "item": [...] } }`: a list wrapped in one-key objects. */
+const unwrapList = (current: unknown, depth: number): unknown => {
+	if (depth >= 3 || !isRecord(current)) return current;
+	const values = Object.values(current);
+	const inner = values.length === 1 ? unstring(values[0]) : undefined;
+	if (!Array.isArray(inner) && !isRecord(inner)) return current;
+	return unwrapList(inner, depth + 1);
+};
+
 const listInside = (value: unknown): unknown => {
-	let current = value;
-	for (let depth = 0; depth < 3 && isRecord(current); depth += 1) {
-		const values = Object.values(current);
-		const inner = values.length === 1 ? unstring(values[0]) : undefined;
-		if (!Array.isArray(inner) && !isRecord(inner)) break;
-		current = inner;
-	}
+	const current = unwrapList(value, 0);
 	return Array.isArray(current) ? current : value;
 };
 

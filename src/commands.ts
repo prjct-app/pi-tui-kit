@@ -25,15 +25,15 @@ export function completer(options: readonly CommandOption[] | (() => readonly Co
 	return (prefix: string): AutocompleteItem[] | null => {
 		const words = prefix.split(/\s+/);
 		const partial = words.pop() ?? "";
-		let level = typeof options === "function" ? options() : options;
+		const at = { level: typeof options === "function" ? options() : options };
 		const path: string[] = [];
 		for (const word of words.filter(Boolean)) {
-			const found = level.find(option => option.value === word);
+			const found = at.level.find(option => option.value === word);
 			if (!found) return null;
 			path.push(word);
-			level = list(found.options);
+			at.level = list(found.options);
 		}
-		const items = level
+		const items = at.level
 			.filter(option => option.value.toLowerCase().startsWith(partial.toLowerCase()))
 			.map(option => ({ value: [...path, option.value].join(" "), label: option.value, description: brand(option.description) }));
 		return items.length ? items : null;

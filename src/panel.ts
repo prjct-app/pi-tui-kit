@@ -296,7 +296,7 @@ export function createPanel(spec: PanelSpec, tui: TUI, theme: Theme, done: () =>
 			state.scroll = Math.min(state.scroll, Math.max(0, detail.length - bodyHeight));
 			const shown = detail.slice(state.scroll, state.scroll + bodyHeight);
 			const divider = theme.fg(state.focus === "detail" ? "accent" : "dim", SYMBOL.divider);
-			for (let row = 0; row < bodyHeight; row += 1) {
+			for (const row of Array.from({ length: bodyHeight }, (_, index) => index)) {
 				body.push(`${fit(list[row] ?? "", listWidth)} ${divider} ${fit(shown[row] ?? "", detailWidth)}`);
 			}
 		} else if (state.focus === "detail" && item) {
